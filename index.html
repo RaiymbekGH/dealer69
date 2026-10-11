@@ -15,6 +15,7 @@
     --accent-text: #ffffff;
     --mine: #e1f1f6;
     --bubble: #ffffff;
+    --danger: #b3261e;
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -23,13 +24,13 @@
     :root:not([data-theme="light"]) {
       --bg: #12161a; --panel: #1b2026; --text: #e8ecf0; --muted: #8b95a1;
       --line: #2a313a; --accent: #3aa8c9; --accent-text: #0b1317;
-      --mine: #1c3540; --bubble: #222932;
+      --mine: #1c3540; --bubble: #222932; --danger: #f2877f;
     }
   }
   :root[data-theme="dark"] {
     --bg: #12161a; --panel: #1b2026; --text: #e8ecf0; --muted: #8b95a1;
     --line: #2a313a; --accent: #3aa8c9; --accent-text: #0b1317;
-    --mine: #1c3540; --bubble: #222932;
+    --mine: #1c3540; --bubble: #222932; --danger: #f2877f;
   }
   *, *::before, *::after { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -77,17 +78,20 @@
   .meta b { color: var(--text); font-weight: 600; }
   .text { white-space: pre-wrap; overflow-wrap: anywhere; }
   .media { display: block; max-width: 100%; max-height: 360px; border-radius: 10px; margin-top: 8px; }
-  .text + .media, .bubble > .media:first-child { margin-top: 0; }
+  .bubble > .media:first-child { margin-top: 0; }
   .file {
     display: flex; align-items: center; gap: 10px; margin-top: 8px;
     padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
     color: var(--text); text-decoration: none; background: var(--panel);
   }
+  .bubble > .file:first-child { margin-top: 0; }
   .file:hover { border-color: var(--accent); }
   .file svg { flex: none; color: var(--accent); }
   .file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file small { color: var(--muted); margin-left: auto; padding-left: 8px; flex: none; }
   .composer { border-top: 1px solid var(--line); padding: 10px 12px; }
+  #err { color: var(--danger); font-size: 14px; margin: 0 2px 8px; }
+  #err:empty { display: none; }
   #pending { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   #pending:empty { display: none; }
   .chip {
@@ -139,10 +143,11 @@
   </header>
 
   <main id="log" aria-live="polite">
-    <div class="empty" id="empty">Сообщений пока нет. Напиши первым или перетащи сюда файл.</div>
+    <div class="empty" id="empty">Загрузка…</div>
   </main>
 
   <div class="composer">
+    <div id="err" role="alert"></div>
     <div id="pending"></div>
     <div class="row">
       <input type="file" id="file" multiple class="sr" tabindex="-1">
@@ -156,8 +161,15 @@
 </div>
 <div id="drop">Отпусти файл, чтобы прикрепить</div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (function () {
+  var SUPABASE_URL = 'https://cgurdkntrzjcmbxxajbp.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_UoGFUoWn0qi7-a_v0BhNkQ_vHB8Bvdn';
+  var BUCKET = 'chat-files';
+  var MAX_FILE = 20 * 1024 * 1024;
+  var FILE_PREFIX = SUPABASE_URL + '/storage/v1/object/public/' + BUCKET + '/';
+
   var log = document.getElementById('log');
   var empty = document.getElementById('empty');
   var textEl = document.getElementById('text');
@@ -165,13 +177,24 @@
   var fileInput = document.getElementById('file');
   var pendingEl = document.getElementById('pending');
   var nameEl = document.getElementById('name');
+  var errEl = document.getElementById('err');
   var pending = [];
+  var sending = false;
+  var shown = {};
+
+  if (!window.supabase) {
+    empty.textContent = 'Не удалось загрузить библиотеку. Проверь интернет и обнови страницу.';
+    return;
+  }
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   try { nameEl.value = localStorage.getItem('chat-name') || ''; } catch (e) {}
   nameEl.addEventListener('input', function () {
     try { localStorage.setItem('chat-name', nameEl.value); } catch (e) {}
   });
   function myName() { return nameEl.value.trim() || 'Гость'; }
+
+  function showErr(t) { errEl.textContent = t || ''; }
 
   function size(n) {
     if (n < 1024) return n + ' Б';
@@ -180,7 +203,8 @@
   }
 
   function refresh() {
-    sendBtn.disabled = !textEl.value.trim() && pending.length === 0;
+    sendBtn.disabled = sending || (!textEl.value.trim() && pending.length === 0);
+    sendBtn.textContent = sending ? 'Отправка…' : 'Отправить';
     pendingEl.textContent = '';
     pending.forEach(function (f, i) {
       var chip = document.createElement('div'); chip.className = 'chip';
@@ -193,57 +217,124 @@
   }
 
   function addFiles(list) {
-    Array.prototype.forEach.call(list, function (f) { pending.push(f); });
+    showErr('');
+    Array.prototype.forEach.call(list, function (f) {
+      if (f.size > MAX_FILE) { showErr('Файл «' + f.name + '» больше 20 МБ и не добавлен.'); return; }
+      pending.push(f);
+    });
     refresh();
   }
 
   function fileNode(f) {
-    var url = URL.createObjectURL(f);
-    if (f.type.indexOf('image/') === 0) {
+    // показываем только файлы из нашего хранилища
+    if (!f || typeof f.url !== 'string' || f.url.indexOf(FILE_PREFIX) !== 0) return null;
+    var type = typeof f.type === 'string' ? f.type : '';
+    var name = typeof f.name === 'string' ? f.name : 'файл';
+    if (type.indexOf('image/') === 0 && type !== 'image/svg+xml') {
       var img = document.createElement('img'); img.className = 'media';
-      img.src = url; img.alt = f.name; return img;
+      img.src = f.url; img.alt = name; img.loading = 'lazy'; return img;
     }
-    if (f.type.indexOf('video/') === 0) {
+    if (type.indexOf('video/') === 0) {
       var v = document.createElement('video'); v.className = 'media';
-      v.src = url; v.controls = true; v.preload = 'metadata'; v.playsInline = true; return v;
+      v.src = f.url; v.controls = true; v.preload = 'metadata'; v.playsInline = true; return v;
     }
-    if (f.type.indexOf('audio/') === 0) {
+    if (type.indexOf('audio/') === 0) {
       var a = document.createElement('audio'); a.className = 'media';
-      a.src = url; a.controls = true; return a;
+      a.src = f.url; a.controls = true; return a;
     }
     var link = document.createElement('a'); link.className = 'file';
-    link.href = url; link.download = f.name;
+    link.href = f.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
     link.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>';
-    var n = document.createElement('span'); n.textContent = f.name;
-    var s = document.createElement('small'); s.textContent = size(f.size);
+    var n = document.createElement('span'); n.textContent = name;
+    var s = document.createElement('small'); s.textContent = typeof f.size === 'number' ? size(f.size) : '';
     link.appendChild(n); link.appendChild(s); return link;
+  }
+
+  function timeLabel(iso) {
+    var d = new Date(iso), now = new Date();
+    var t = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === now.toDateString()) return t;
+    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) + ', ' + t;
+  }
+
+  function render(m, mine) {
+    if (shown[m.id]) {
+      if (mine) shown[m.id].classList.add('mine');
+      return;
+    }
+    if (empty) { empty.remove(); empty = null; }
+    var nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+
+    var msg = document.createElement('div'); msg.className = 'msg' + (mine ? ' mine' : '');
+    var meta = document.createElement('div'); meta.className = 'meta';
+    var b = document.createElement('b'); b.textContent = String(m.name || 'Гость').slice(0, 24);
+    var t = document.createElement('span'); t.textContent = ' · ' + timeLabel(m.created_at);
+    meta.appendChild(b); meta.appendChild(t);
+
+    var bubble = document.createElement('div'); bubble.className = 'bubble';
+    if (m.text) {
+      var p = document.createElement('div'); p.className = 'text'; p.textContent = String(m.text);
+      bubble.appendChild(p);
+    }
+    (Array.isArray(m.files) ? m.files : []).forEach(function (f) {
+      var node = fileNode(f); if (node) bubble.appendChild(node);
+    });
+
+    msg.appendChild(meta); msg.appendChild(bubble); log.appendChild(msg);
+    shown[m.id] = msg;
+    if (nearBottom || mine) log.scrollTop = log.scrollHeight;
+  }
+
+  function uploadOne(f) {
+    var ext = (f.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+    var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+    var path = new Date().toISOString().slice(0, 10) + '/' + id + (ext ? '.' + ext : '');
+    return sb.storage.from(BUCKET).upload(path, f, { contentType: f.type || 'application/octet-stream', upsert: false })
+      .then(function (res) {
+        if (res.error) throw res.error;
+        var url = sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+        return { url: url, name: f.name, type: f.type || '', size: f.size };
+      });
   }
 
   function post() {
     var text = textEl.value.trim();
-    if (!text && !pending.length) return;
-    if (empty) { empty.remove(); empty = null; }
+    if (sending || (!text && !pending.length)) return;
+    sending = true; showErr(''); refresh();
+    var toSend = pending.slice();
 
-    var msg = document.createElement('div'); msg.className = 'msg mine';
-    var meta = document.createElement('div'); meta.className = 'meta';
-    var b = document.createElement('b'); b.textContent = myName();
-    var t = document.createElement('span');
-    t.textContent = ' · ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    meta.appendChild(b); meta.appendChild(t);
-
-    var bubble = document.createElement('div'); bubble.className = 'bubble';
-    if (text) {
-      var p = document.createElement('div'); p.className = 'text'; p.textContent = text;
-      bubble.appendChild(p);
-    }
-    pending.forEach(function (f) { bubble.appendChild(fileNode(f)); });
-
-    msg.appendChild(meta); msg.appendChild(bubble); log.appendChild(msg);
-    log.scrollTop = log.scrollHeight;
-
-    textEl.value = ''; textEl.style.height = 'auto';
-    pending = []; refresh(); textEl.focus();
+    Promise.all(toSend.map(uploadOne)).then(function (files) {
+      return sb.from('messages').insert({ name: myName(), text: text || null, files: files }).select().single();
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      render(res.data, true);
+      textEl.value = ''; textEl.style.height = 'auto'; pending = [];
+    }).catch(function (e) {
+      showErr('Не удалось отправить: ' + (e && e.message ? e.message : 'ошибка сети') + '. Текст и файлы сохранены, попробуй ещё раз.');
+    }).then(function () {
+      sending = false; refresh(); textEl.focus();
+    });
   }
+
+  // загрузка истории
+  sb.from('messages').select('*').order('created_at', { ascending: false }).limit(200)
+    .then(function (res) {
+      if (res.error) throw res.error;
+      var rows = res.data.reverse();
+      if (!rows.length) { empty.textContent = 'Сообщений пока нет. Напиши первым или перетащи сюда файл.'; return; }
+      rows.forEach(function (m) { render(m, false); });
+      log.scrollTop = log.scrollHeight;
+    })
+    .catch(function (e) {
+      empty.textContent = 'Не удалось загрузить сообщения: ' + (e && e.message ? e.message : 'ошибка сети');
+    });
+
+  // новые сообщения в реальном времени
+  sb.channel('chat-messages')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, function (p) {
+      render(p.new, false);
+    })
+    .subscribe();
 
   textEl.addEventListener('input', function () {
     textEl.style.height = 'auto';
