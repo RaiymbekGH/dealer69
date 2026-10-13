@@ -236,7 +236,7 @@
   var myHash = null;
 
   if (!window.supabase) {
-    empty.textContent = 'Не удалось загрузить библиотеку. Проверь интернет и обнови страницу.';
+    empty.textContent = 'Не удалось загрузить "библиотеку". Проверь интернет и обнови страницу.';
     return;
   }
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -421,7 +421,7 @@
   }
 
   function del(m) {
-    if (!confirm('Удалить сообщение? Это нельзя отменить.')) return;
+    if (!confirm('Удалить сообщение?<br>Это нельзя отменить.')) return;
     showErr('');
     sb.rpc('delete_message', { msg_id: m.id, author_key: myKey }).then(function (res) {
       if (res.error) throw res.error;
@@ -530,7 +530,7 @@
   }).then(function (res) {
     if (res.error) throw res.error;
     var rows = res.data.reverse();
-    if (!rows.length) { empty.textContent = 'Сообщений пока нет. Напиши первым или перетащи сюда файл.'; return; }
+    if (!rows.length) { empty.textContent = 'Сообщений пока нет. Напиши первым или отправь файл!'; return; }
     rows.forEach(function (m) { render(m); });
     log.scrollTop = log.scrollHeight;
   }).catch(function (e) {
