@@ -170,6 +170,10 @@
     background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
   }
   .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+  .chip.thumb { padding: 4px 6px 4px 4px; border-radius: 12px; }
+  .chip img, .chip video {
+    width: 44px; height: 44px; object-fit: cover; border-radius: 8px; flex: none; background: var(--line);
+  }
   .chip button {
     border: 0; background: transparent; color: var(--muted); cursor: pointer;
     font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 999px;
@@ -380,13 +384,39 @@
   function refresh() {
     sendBtn.disabled = sending || (!textEl.value.trim() && pending.length === 0);
     sendBtn.textContent = sending ? sendLabel : 'Отправить';
+  }
+
+  // миниатюры выбранных файлов
+  var thumbCache = new Map();
+  function thumbUrl(f) {
+    if (!thumbCache.has(f)) thumbCache.set(f, URL.createObjectURL(f));
+    return thumbCache.get(f);
+  }
+  function dropThumb(f) {
+    if (thumbCache.has(f)) { URL.revokeObjectURL(thumbCache.get(f)); thumbCache.delete(f); }
+  }
+  function clearPending() {
+    pending.forEach(dropThumb);
+    pending = [];
+    renderPending();
+  }
+  function renderPending() {
     pendingEl.textContent = '';
     pending.forEach(function (f, i) {
+      var type = f.type || '';
       var chip = document.createElement('div'); chip.className = 'chip';
+      if (type.indexOf('image/') === 0) {
+        var im = document.createElement('img'); im.src = thumbUrl(f); im.alt = '';
+        chip.classList.add('thumb'); chip.appendChild(im);
+      } else if (type.indexOf('video/') === 0) {
+        var vd = document.createElement('video'); vd.src = thumbUrl(f) + '#t=0.1';
+        vd.preload = 'metadata'; vd.muted = true; vd.playsInline = true;
+        chip.classList.add('thumb'); chip.appendChild(vd);
+      }
       var s = document.createElement('span'); s.textContent = f.name;
       var x = document.createElement('button'); x.type = 'button';
       x.setAttribute('aria-label', 'Убрать ' + f.name); x.textContent = '×';
-      x.onclick = function () { pending.splice(i, 1); refresh(); };
+      x.onclick = function () { dropThumb(f); pending.splice(i, 1); renderPending(); refresh(); };
       chip.appendChild(s); chip.appendChild(x); pendingEl.appendChild(chip);
     });
   }
@@ -399,6 +429,7 @@
       if (f.size > limit) { showErr('Файл «' + f.name + '» больше ' + (limit / 1048576) + ' МБ и не добавлен.'); return; }
       pending.push(f);
     });
+    renderPending();
     refresh();
   }
 
@@ -813,7 +844,7 @@
       if (res.error) throw res.error;
       if (!myHash) rememberMine(res.data.id);
       render(res.data, !myHash);
-      textEl.value = ''; textEl.style.height = 'auto'; pending = [];
+      textEl.value = ''; textEl.style.height = 'auto'; clearPending();
       cancelReply();
       clearTimeout(typingTimer);
       if (iAmTyping) setPresence(false);
