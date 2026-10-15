@@ -52,20 +52,41 @@
   }
   header {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 12px 16px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--line);
   }
   header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .sub { font-size: 12.5px; color: var(--muted); min-height: 1.2em; }
   .who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
   .who input {
     width: 130px; padding: 6px 10px; font: inherit; color: var(--text);
     background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
   }
+  .logwrap { flex: 1; min-height: 0; position: relative; display: flex; }
   #log {
-    flex: 1; overflow-y: auto; padding: 16px;
+    flex: 1; min-width: 0; overflow-y: auto; padding: 16px;
     display: flex; flex-direction: column; gap: 12px;
   }
   .empty { margin: auto; text-align: center; color: var(--muted); max-width: 30ch; }
+  .more {
+    align-self: center; padding: 6px 16px; font: inherit; font-size: 14px;
+    color: var(--accent); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer;
+  }
+  .more:disabled { opacity: .6; cursor: default; }
+  .tobottom {
+    position: absolute; right: 14px; bottom: 12px; width: 44px; height: 44px;
+    border-radius: 50%; border: 1px solid var(--line); background: var(--panel);
+    color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  }
+  .tobottom[hidden] { display: none; }
+  .badge {
+    position: absolute; top: -6px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px;
+    border-radius: 999px; background: var(--accent); color: var(--accent-text);
+    font-size: 12px; font-weight: 700; line-height: 20px; text-align: center;
+  }
+  .badge[hidden] { display: none; }
   .day {
     align-self: center; font-size: 12.5px; color: var(--muted);
     background: var(--bg); padding: 2px 12px; border-radius: 999px;
@@ -96,6 +117,15 @@
   .quote span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .media { display: block; max-width: 100%; max-height: 360px; border-radius: 10px; margin-top: 8px; }
   .bubble > .media:first-child { margin-top: 0; }
+  img.mi { cursor: zoom-in; }
+  .vwrap { position: relative; margin-top: 8px; max-width: 100%; }
+  .bubble > .vwrap:first-child { margin-top: 0; }
+  .vwrap .media { margin-top: 0; }
+  .expand {
+    position: absolute; top: 8px; right: 8px; width: 34px; height: 34px;
+    border: 0; border-radius: 8px; background: rgba(0,0,0,.55); color: #fff;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
   .file {
     display: flex; align-items: center; gap: 10px; margin-top: 8px;
     padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
@@ -114,7 +144,8 @@
   }
   .actions button:hover { color: var(--text); }
   .actions .danger:hover { color: var(--danger); }
-  .composer { border-top: 1px solid var(--line); padding: 10px 12px; }
+  .composer { border-top: 1px solid var(--line); padding: 8px 12px 10px; }
+  #typing { font-size: 13px; color: var(--muted); min-height: 1.3em; margin: 0 2px 4px; }
   #err { color: var(--danger); font-size: 14px; margin: 0 2px 8px; }
   #err:empty { display: none; }
   .replybar {
@@ -170,22 +201,59 @@
   }
   body.dragging #drop { display: flex; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* полноэкранный просмотр */
+  #lb {
+    position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.95);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #lb[hidden] { display: none; }
+  .lb-stage {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+    touch-action: pan-y;
+  }
+  .lb-media { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .lb-btn {
+    position: absolute; z-index: 2; border: 0; color: #fff; cursor: pointer;
+    background: rgba(255,255,255,.16); border-radius: 50%; width: 46px; height: 46px;
+    font-size: 28px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  }
+  .lb-btn[hidden] { display: none; }
+  .lb-close { top: calc(env(safe-area-inset-top, 0px) + 10px); right: 10px; font-size: 30px; }
+  .lb-prev { left: 8px; top: 50%; transform: translateY(-50%); }
+  .lb-next { right: 8px; top: 50%; transform: translateY(-50%); }
+  .lb-count {
+    position: absolute; z-index: 2; top: calc(env(safe-area-inset-top, 0px) + 20px); left: 14px;
+    color: #fff; font-size: 14px; background: rgba(255,255,255,.16);
+    padding: 3px 12px; border-radius: 999px;
+  }
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>Общий чат</h1>
+    <div>
+      <h1>Общий чат</h1>
+      <div class="sub" id="online"></div>
+    </div>
     <label class="who">Имя
       <input id="name" maxlength="24" placeholder="Гость" autocomplete="nickname">
     </label>
   </header>
 
-  <main id="log" aria-live="polite">
-    <div class="empty" id="empty">Загрузка…</div>
-  </main>
+  <div class="logwrap">
+    <main id="log" aria-live="polite">
+      <div class="empty" id="empty">Загрузка…</div>
+    </main>
+    <button class="tobottom" id="tobottom" type="button" aria-label="Вниз к новым сообщениям" hidden>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      <span class="badge" id="badge" hidden></span>
+    </button>
+  </div>
 
   <div class="composer">
+    <div id="typing"></div>
     <div id="err" role="alert"></div>
     <div class="replybar" id="replybar" hidden>
       <div><b id="replyName"></b><span id="replyText"></span></div>
@@ -204,13 +272,25 @@
 </div>
 <div id="drop">Отпусти файл, чтобы прикрепить</div>
 
+<div id="lb" hidden>
+  <div class="lb-stage" id="lbStage"></div>
+  <div class="lb-count" id="lbCount"></div>
+  <button class="lb-btn lb-close" id="lbClose" type="button" aria-label="Закрыть">×</button>
+  <button class="lb-btn lb-prev" id="lbPrev" type="button" aria-label="Предыдущее">‹</button>
+  <button class="lb-btn lb-next" id="lbNext" type="button" aria-label="Следующее">›</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (function () {
   var SUPABASE_URL = 'https://cgurdkntrzjcmbxxajbp.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_UoGFUoWn0qi7-a_v0BhNkQ_vHB8Bvdn';
   var BUCKET = 'chat-files';
-  var MAX_FILE = 20 * 1024 * 1024;
+  var MAX_FILE = 20 * 1024 * 1024;          // лимит для файлов после сжатия
+  var MAX_IMAGE_SRC = 50 * 1024 * 1024;     // фото до сжатия
+  var PAGE = 50;
+  var IMG_MAX_SIDE = 1600;
+  var IMG_QUALITY = 0.8;
   var FILE_PREFIX = SUPABASE_URL + '/storage/v1/object/public/' + BUCKET + '/';
 
   var log = document.getElementById('log');
@@ -224,27 +304,41 @@
   var replyBar = document.getElementById('replybar');
   var replyNameEl = document.getElementById('replyName');
   var replyTextEl = document.getElementById('replyText');
+  var onlineEl = document.getElementById('online');
+  var typingEl = document.getElementById('typing');
+  var toBottom = document.getElementById('tobottom');
+  var badge = document.getElementById('badge');
 
   var pending = [];
   var sending = false;
+  var sendLabel = 'Отправка…';
   var shown = {};   // id -> элемент
   var data = {};    // id -> данные сообщения
-  var myIds = {};   // старые сообщения этого устройства (до появления ключа автора)
+  var myIds = {};
   var replyTo = null;
   var lastDay = '';
   var myKey = null;
   var myHash = null;
+  var hasMore = false;
+  var oldestLoadedId = null;
+  var loadingOlder = false;
+  var initialDone = false;
+  var stickUntil = 0;
+  var unread = 0;
 
   if (!window.supabase) {
-    empty.textContent = 'Не удалось загрузить "библиотеку". Проверь интернет и обнови страницу.';
+    empty.textContent = 'Не удалось загрузить библиотеку. Проверь интернет и обнови страницу.';
     return;
   }
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // ---- имя и «мои» сообщения ----
+  // ---------- имя и «мои» сообщения ----------
   try { nameEl.value = localStorage.getItem('chat-name') || ''; } catch (e) {}
+  var nameTimer = null;
   nameEl.addEventListener('input', function () {
     try { localStorage.setItem('chat-name', nameEl.value); } catch (e) {}
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(function () { setPresence(iAmTyping); }, 800);
   });
   function myName() { return nameEl.value.trim() || 'Гость'; }
 
@@ -254,7 +348,6 @@
     try { localStorage.setItem('chat-my-ids', JSON.stringify(Object.keys(myIds).slice(-500))); } catch (e) {}
   }
 
-  // секретный ключ автора: живёт только в этом браузере, в базу уходит лишь его хэш
   function randomHex(n) {
     var a = new Uint8Array(n); crypto.getRandomValues(a);
     return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
@@ -286,7 +379,7 @@
 
   function refresh() {
     sendBtn.disabled = sending || (!textEl.value.trim() && pending.length === 0);
-    sendBtn.textContent = sending ? 'Отправка…' : 'Отправить';
+    sendBtn.textContent = sending ? sendLabel : 'Отправить';
     pendingEl.textContent = '';
     pending.forEach(function (f, i) {
       var chip = document.createElement('div'); chip.className = 'chip';
@@ -301,24 +394,64 @@
   function addFiles(list) {
     showErr('');
     Array.prototype.forEach.call(list, function (f) {
-      if (f.size > MAX_FILE) { showErr('Файл «' + f.name + '» больше 20 МБ и не добавлен.'); return; }
+      var isImg = (f.type || '').indexOf('image/') === 0;
+      var limit = isImg ? MAX_IMAGE_SRC : MAX_FILE;
+      if (f.size > limit) { showErr('Файл «' + f.name + '» больше ' + (limit / 1048576) + ' МБ и не добавлен.'); return; }
       pending.push(f);
     });
     refresh();
   }
 
-  // ---- вложения ----
+  // ---------- сжатие фото ----------
+  function compressImage(file) {
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type) || !window.createImageBitmap) return Promise.resolve(file);
+    return createImageBitmap(file, { imageOrientation: 'from-image' })
+      .catch(function () { return createImageBitmap(file); })
+      .then(function (bmp) {
+        var k = Math.min(1, IMG_MAX_SIDE / Math.max(bmp.width, bmp.height));
+        var w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+        var canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(bmp, 0, 0, w, h);
+        if (bmp.close) bmp.close();
+        return new Promise(function (resolve) {
+          canvas.toBlob(function (blob) {
+            if (!blob || blob.size >= file.size) { resolve(file); return; }
+            var base = file.name.replace(/\.[^.]+$/, '') || 'photo';
+            resolve(new File([blob], base + '.jpg', { type: 'image/jpeg' }));
+          }, 'image/jpeg', IMG_QUALITY);
+        });
+      })
+      .catch(function () { return file; });
+  }
+
+  // ---------- вложения ----------
+  function expandIcon() {
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+  }
+
   function fileNode(f) {
     if (!f || typeof f.url !== 'string' || f.url.indexOf(FILE_PREFIX) !== 0) return null;
     var type = typeof f.type === 'string' ? f.type : '';
     var name = typeof f.name === 'string' ? f.name : 'файл';
     if (type.indexOf('image/') === 0 && type !== 'image/svg+xml') {
-      var img = document.createElement('img'); img.className = 'media';
-      img.src = f.url; img.alt = name; img.loading = 'lazy'; return img;
+      var img = document.createElement('img'); img.className = 'media mi';
+      img.src = f.url; img.alt = name; img.decoding = 'async';
+      img.dataset.kind = 'image'; img.dataset.url = f.url; img.dataset.name = name;
+      img.addEventListener('click', function () { openLB(img); });
+      return img;
     }
     if (type.indexOf('video/') === 0) {
+      var wrap = document.createElement('div'); wrap.className = 'vwrap mi';
+      wrap.dataset.kind = 'video'; wrap.dataset.url = f.url; wrap.dataset.name = name;
       var v = document.createElement('video'); v.className = 'media';
-      v.src = f.url; v.controls = true; v.preload = 'metadata'; v.playsInline = true; return v;
+      v.src = f.url; v.controls = true; v.preload = 'metadata'; v.playsInline = true;
+      var ex = document.createElement('button'); ex.type = 'button'; ex.className = 'expand';
+      ex.setAttribute('aria-label', 'Открыть на весь экран'); ex.innerHTML = expandIcon();
+      ex.addEventListener('click', function () { v.pause(); openLB(wrap); });
+      wrap.appendChild(v); wrap.appendChild(ex);
+      return wrap;
     }
     if (type.indexOf('audio/') === 0) {
       var a = document.createElement('audio'); a.className = 'media';
@@ -332,7 +465,70 @@
     link.appendChild(n); link.appendChild(s); return link;
   }
 
-  // ---- время, цвета, дни ----
+  // ---------- полноэкранный просмотр ----------
+  var lb = document.getElementById('lb');
+  var lbStage = document.getElementById('lbStage');
+  var lbCount = document.getElementById('lbCount');
+  var lbPrev = document.getElementById('lbPrev');
+  var lbNext = document.getElementById('lbNext');
+  var lbItems = [];
+  var lbIndex = 0;
+
+  function lbClearStage() {
+    var v = lbStage.querySelector('video');
+    if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+    lbStage.textContent = '';
+  }
+  function lbShow(i) {
+    lbIndex = Math.max(0, Math.min(lbItems.length - 1, i));
+    var it = lbItems[lbIndex];
+    lbClearStage();
+    var el;
+    if (it.dataset.kind === 'video') {
+      el = document.createElement('video');
+      el.src = it.dataset.url; el.controls = true; el.autoplay = true; el.playsInline = true;
+    } else {
+      el = document.createElement('img');
+      el.src = it.dataset.url; el.alt = it.dataset.name || '';
+    }
+    el.className = 'lb-media';
+    lbStage.appendChild(el);
+    lbCount.textContent = (lbIndex + 1) + ' / ' + lbItems.length;
+    lbPrev.hidden = lbIndex === 0;
+    lbNext.hidden = lbIndex === lbItems.length - 1;
+  }
+  function openLB(item) {
+    lbItems = Array.prototype.slice.call(log.querySelectorAll('.mi'));
+    var i = lbItems.indexOf(item);
+    if (i < 0) return;
+    lb.hidden = false;
+    lbShow(i);
+  }
+  function closeLB() { lb.hidden = true; lbClearStage(); }
+
+  document.getElementById('lbClose').addEventListener('click', closeLB);
+  lbPrev.addEventListener('click', function () { lbShow(lbIndex - 1); });
+  lbNext.addEventListener('click', function () { lbShow(lbIndex + 1); });
+  lbStage.addEventListener('click', function (e) { if (e.target === lbStage) closeLB(); });
+  document.addEventListener('keydown', function (e) {
+    if (lb.hidden) return;
+    if (e.key === 'Escape') closeLB();
+    else if (e.key === 'ArrowLeft') lbShow(lbIndex - 1);
+    else if (e.key === 'ArrowRight') lbShow(lbIndex + 1);
+  });
+  var tx = 0, ty = 0, onControls = false;
+  lbStage.addEventListener('touchstart', function (e) {
+    var t = e.changedTouches[0]; tx = t.clientX; ty = t.clientY;
+    onControls = !!lbStage.querySelector('video') && ty > window.innerHeight - 110;
+  }, { passive: true });
+  lbStage.addEventListener('touchend', function (e) {
+    if (onControls) return;
+    var t = e.changedTouches[0], dx = t.clientX - tx, dy = t.clientY - ty;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) lbShow(lbIndex + (dx < 0 ? 1 : -1));
+    else if (dy > 110 && Math.abs(dy) > 1.5 * Math.abs(dx)) closeLB();
+  }, { passive: true });
+
+  // ---------- время, цвета, дни ----------
   function timeLabel(iso) {
     var d = new Date(iso), now = new Date();
     var t = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -351,7 +547,7 @@
     return 'hsl(' + h + ' 60% var(--author-l))';
   }
 
-  // ---- ответы ----
+  // ---------- ответы ----------
   function previewOf(m) {
     var t = (m.text || '').replace(/\s+/g, ' ').trim();
     if (t) return t.slice(0, 120);
@@ -410,7 +606,7 @@
   }
   document.getElementById('replyCancel').addEventListener('click', cancelReply);
 
-  // ---- удаление ----
+  // ---------- удаление ----------
   function removeMsg(id) {
     if (data[id]) data[id].deleted = true; else data[id] = { deleted: true };
     if (shown[id]) { shown[id].remove(); delete shown[id]; }
@@ -421,7 +617,7 @@
   }
 
   function del(m) {
-    if (!confirm('Удалить сообщение?<br>Это нельзя отменить.')) return;
+    if (!confirm('Удалить сообщение? Это нельзя отменить.')) return;
     showErr('');
     sb.rpc('delete_message', { msg_id: m.id, author_key: myKey }).then(function (res) {
       if (res.error) throw res.error;
@@ -438,15 +634,29 @@
     b.addEventListener('click', fn); return b;
   }
 
-  // ---- вывод сообщения ----
-  function render(m, forceMine) {
+  // ---------- прокрутка и кнопка «вниз» ----------
+  function distBottom() { return log.scrollHeight - log.scrollTop - log.clientHeight; }
+  function updateToBottom() {
+    var far = distBottom() > 200;
+    if (!far) unread = 0;
+    toBottom.hidden = !far;
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.hidden = !unread;
+  }
+  log.addEventListener('scroll', updateToBottom);
+  toBottom.addEventListener('click', function () {
+    log.scrollTo({ top: log.scrollHeight, behavior: 'smooth' });
+  });
+
+  // ---------- вывод сообщения ----------
+  function render(m, forceMine, silent) {
     if (shown[m.id] || (data[m.id] && data[m.id].deleted)) return;
     data[m.id] = m;
     var mine = !!forceMine || (!!myHash && m.author_hash === myHash) || !!myIds[m.id];
     var canDelete = !!myHash && m.author_hash === myHash;
 
     if (empty) { empty.remove(); empty = null; }
-    var nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 120;
+    var nearBottom = distBottom() < 120;
 
     var created = new Date(m.created_at);
     if (created.toDateString() !== lastDay) {
@@ -481,29 +691,117 @@
     msg.appendChild(meta); msg.appendChild(bubble); msg.appendChild(actions);
     log.appendChild(msg);
     shown[m.id] = msg;
-    if (nearBottom || mine) log.scrollTop = log.scrollHeight;
+    if (replyTo && replyTo.id === m.id) msg.classList.add('target');
+
+    var stick = false;
+    if (!silent) {
+      stick = nearBottom || mine;
+      if (stick) log.scrollTop = log.scrollHeight;
+      else if (initialDone) unread++;
+      updateToBottom();
+    }
+    // когда фото и видео догрузятся и вырастут, не даём «уехать» от низа
+    Array.prototype.forEach.call(bubble.querySelectorAll('img.media, video.media'), function (el) {
+      var ev = el.tagName === 'IMG' ? 'load' : 'loadedmetadata';
+      el.addEventListener(ev, function () {
+        if ((stick || Date.now() < stickUntil) && distBottom() < 700) log.scrollTop = log.scrollHeight;
+      });
+    });
   }
 
-  // ---- отправка ----
-  function uploadOne(f) {
-    var ext = (f.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
-    var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : randomHex(16);
-    var path = new Date().toISOString().slice(0, 10) + '/' + id + (ext ? '.' + ext : '');
-    return sb.storage.from(BUCKET).upload(path, f, { contentType: f.type || 'application/octet-stream', upsert: false })
-      .then(function (res) {
-        if (res.error) throw res.error;
-        var url = sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
-        return { url: url, name: f.name, type: f.type || '', size: f.size };
+  // ---------- история и подгрузка старых ----------
+  var moreBtn = document.createElement('button');
+  moreBtn.type = 'button'; moreBtn.className = 'more'; moreBtn.textContent = 'Загрузить старые сообщения';
+  moreBtn.addEventListener('click', loadOlder);
+
+  function sortedIds() {
+    return Object.keys(data).map(Number).filter(function (id) { return !data[id].deleted; })
+      .sort(function (a, b) { return a - b; });
+  }
+
+  function rerenderAll() {
+    shown = {}; lastDay = ''; log.textContent = ''; empty = null;
+    if (hasMore) log.appendChild(moreBtn);
+    var ids = sortedIds();
+    if (!ids.length) {
+      empty = document.createElement('div'); empty.className = 'empty'; empty.id = 'empty';
+      empty.textContent = 'Сообщений пока нет. Напиши первым или перетащи сюда файл.';
+      log.appendChild(empty);
+      return;
+    }
+    ids.forEach(function (id) { render(data[id], false, true); });
+  }
+
+  function fetchPage(beforeId) {
+    var q = sb.from('messages').select('*').order('id', { ascending: false }).limit(PAGE);
+    if (beforeId != null) q = q.lt('id', beforeId);
+    return q.then(function (res) {
+      if (res.error) throw res.error;
+      var rows = res.data;
+      hasMore = rows.length === PAGE;
+      rows.forEach(function (m) {
+        if (data[m.id] && data[m.id].deleted) return;
+        data[m.id] = m;
+        if (oldestLoadedId === null || m.id < oldestLoadedId) oldestLoadedId = m.id;
       });
+    });
+  }
+
+  function loadOlder() {
+    if (loadingOlder) return;
+    loadingOlder = true; moreBtn.disabled = true; moreBtn.textContent = 'Загрузка…';
+    var prevH = log.scrollHeight, prevTop = log.scrollTop;
+    fetchPage(oldestLoadedId).then(function () {
+      rerenderAll();
+      log.scrollTop = prevTop + (log.scrollHeight - prevH);
+      updateToBottom();
+    }).catch(function (e) {
+      showErr('Не удалось загрузить старые сообщения: ' + (e && e.message ? e.message : 'ошибка сети'));
+    }).then(function () {
+      loadingOlder = false; moreBtn.disabled = false; moreBtn.textContent = 'Загрузить старые сообщения';
+    });
+  }
+
+  ready.then(function () { return fetchPage(null); }).then(function () {
+    rerenderAll();
+    log.scrollTop = log.scrollHeight;
+    stickUntil = Date.now() + 4000;
+    initialDone = true;
+    updateToBottom();
+  }).catch(function (e) {
+    if (empty) empty.textContent = 'Не удалось загрузить сообщения: ' + (e && e.message ? e.message : 'ошибка сети');
+  });
+
+  // ---------- отправка ----------
+  function uploadOne(f, onDone) {
+    return compressImage(f).then(function (f2) {
+      if (f2.size > MAX_FILE) throw new Error('файл «' + f.name + '» больше 20 МБ даже после сжатия');
+      var ext = (f2.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+      var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : randomHex(16);
+      var path = new Date().toISOString().slice(0, 10) + '/' + id + (ext ? '.' + ext : '');
+      return sb.storage.from(BUCKET).upload(path, f2, { contentType: f2.type || 'application/octet-stream', upsert: false })
+        .then(function (res) {
+          if (res.error) throw res.error;
+          var url = sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+          onDone();
+          return { url: url, name: f2.name, type: f2.type || '', size: f2.size };
+        });
+    });
   }
 
   function post() {
     var text = textEl.value.trim();
     if (sending || (!text && !pending.length)) return;
-    sending = true; showErr(''); refresh();
+    sending = true; showErr('');
     var toSend = pending.slice();
+    var done = 0, total = toSend.length;
+    sendLabel = total ? 'Файлы 0/' + total + '…' : 'Отправка…';
+    refresh();
 
-    Promise.all(toSend.map(uploadOne)).then(function (files) {
+    Promise.all(toSend.map(function (f) {
+      return uploadOne(f, function () { done++; sendLabel = 'Файлы ' + done + '/' + total + '…'; refresh(); });
+    })).then(function (files) {
+      sendLabel = 'Отправка…'; refresh();
       return sb.from('messages').insert({
         name: myName(),
         text: text || null,
@@ -517,6 +815,8 @@
       render(res.data, !myHash);
       textEl.value = ''; textEl.style.height = 'auto'; pending = [];
       cancelReply();
+      clearTimeout(typingTimer);
+      if (iAmTyping) setPresence(false);
     }).catch(function (e) {
       showErr('Не удалось отправить: ' + (e && e.message ? e.message : 'ошибка сети') + '. Текст и файлы сохранены, попробуй ещё раз.');
     }).then(function () {
@@ -524,19 +824,7 @@
     });
   }
 
-  // ---- загрузка истории и живые обновления ----
-  ready.then(function () {
-    return sb.from('messages').select('*').order('created_at', { ascending: false }).limit(200);
-  }).then(function (res) {
-    if (res.error) throw res.error;
-    var rows = res.data.reverse();
-    if (!rows.length) { empty.textContent = 'Сообщений пока нет. Напиши первым или отправь файл!'; return; }
-    rows.forEach(function (m) { render(m); });
-    log.scrollTop = log.scrollHeight;
-  }).catch(function (e) {
-    empty.textContent = 'Не удалось загрузить сообщения: ' + (e && e.message ? e.message : 'ошибка сети');
-  });
-
+  // ---------- новые сообщения в реальном времени ----------
   sb.channel('chat-messages')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, function (p) {
       render(p.new);
@@ -546,11 +834,61 @@
     })
     .subscribe();
 
-  // ---- ввод ----
+  // ---------- «в чате» и «печатает» ----------
+  var sessionId = randomHex(8);
+  var presence = sb.channel('chat-presence', { config: { presence: { key: sessionId } } });
+  var presenceReady = false;
+  var iAmTyping = false;
+  var lastTrack = 0;
+  var typingTimer = null;
+
+  function setPresence(typing) {
+    if (!presenceReady) return;
+    iAmTyping = typing; lastTrack = Date.now();
+    try {
+      Promise.resolve(presence.track({ name: myName(), typing: typing, ts: Date.now() })).catch(function () {});
+    } catch (e) {}
+  }
+
+  function renderPresence() {
+    var st = presence.presenceState();
+    var keys = Object.keys(st);
+    onlineEl.textContent = keys.length ? 'Сейчас в чате: ' + keys.length : '';
+    var names = [];
+    keys.forEach(function (k) {
+      if (k === sessionId) return;
+      var arr = st[k]; var meta = arr && arr[arr.length - 1];
+      if (meta && meta.typing) names.push(String(meta.name || 'Гость').slice(0, 24));
+    });
+    var line = '';
+    if (names.length === 1) line = names[0] + ' печатает…';
+    else if (names.length === 2) line = names[0] + ' и ' + names[1] + ' печатают…';
+    else if (names.length > 2) line = 'Печатают ' + names.length + ' человека…';
+    typingEl.textContent = line;
+  }
+
+  presence.on('presence', { event: 'sync' }, renderPresence)
+    .subscribe(function (status) {
+      if (status === 'SUBSCRIBED') { presenceReady = true; setPresence(false); }
+    });
+
+  function onTyping() {
+    if (!textEl.value.trim()) {
+      clearTimeout(typingTimer);
+      if (iAmTyping) setPresence(false);
+      return;
+    }
+    if (!iAmTyping || Date.now() - lastTrack > 4000) setPresence(true);
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(function () { setPresence(false); }, 3000);
+  }
+
+  // ---------- ввод ----------
   textEl.addEventListener('input', function () {
     textEl.style.height = 'auto';
     textEl.style.height = Math.min(textEl.scrollHeight, 140) + 'px';
     refresh();
+    onTyping();
   });
   textEl.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); post(); }
